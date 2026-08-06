@@ -13,7 +13,9 @@
         "laravel/tinker": "^2.7",
         "nunomaduro/collision": "^6.1",
         "psy/psysh": "@stable",
-        "pusher/pusher-php-server": "^7.2"
+        "pusher/pusher-php-server": "^7.2",
+        "symfony/css-selector": "6.4",
+        "tijsverkoyen/css-to-inline-styles": "2.3"
     },
     "require-dev": {
         "fakerphp/faker": "^1.9.1",
