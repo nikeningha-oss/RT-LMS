@@ -131,7 +131,7 @@ Route::middleware(['role:customer'])->prefix('customer')->name('customer.')->gro
 Route::middleware(['role:driver'])->prefix('driver')->name('driver.')->group(function () {
     Route::get('/dashboard', [DriverController::class, 'dashboard'])->name('dashboard');
     Route::get('/orders', [DriverController::class, 'orders'])->name('orders');
-    Route::post('/toggle-status', [DriverController::class, 'toggleStatus'])->name('driver.toggle-status');
+    Route::post('/toggle-status', [DriverController::class, 'toggleStatus'])->name('toggle-status');
     
     Route::put('/orders/{order}/status', [DriverController::class, 'updateStatus'])->name('update-status');
     Route::post('/orders/{order}/status', [DriverController::class, 'updateStatus'])->name('update-status-post');
