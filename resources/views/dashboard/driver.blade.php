@@ -491,16 +491,18 @@
             </span>
         @endif
         
-        <div class="status-toggle-container">
-            <div class="status-dot {{ $statusClass }}"></div>
-            <span class="status-text {{ $statusClass }}">{{ $statusText }}</span>
-            <form method="POST" action="{{ route('driver.toggle-status') }}" style="display:inline; margin:0;">
-                @csrf
-                <button type="submit" class="toggle-btn {{ $statusClass }}">
-                    <div class="toggle-slider {{ $statusClass }}"></div>
-                </button>
-            </form>
-        </div>
+<div class="status-toggle-container">
+    <div class="status-dot {{ $statusClass }}"></div>
+    <span class="status-text {{ $statusClass }}">{{ $statusText }}</span>
+    
+  
+    <form method="POST" action="{{ route('driver.toggle-status') }}" style="display:inline; margin:0;">
+        @csrf
+        <button type="submit" class="toggle-btn {{ $statusClass }}">
+            <div class="toggle-slider {{ $statusClass }}"></div>
+        </button>
+    </form>
+</div>
     </div>
 </div>
 

@@ -214,8 +214,15 @@
         }
     }
 
+    // =============================================================
+    // ✅ FIXED: loadNotifications() - Added AJAX header
+    // =============================================================
     function loadNotifications() {
-        fetch('/notifications')
+        fetch('/notifications', {
+            headers: {
+                'X-Requested-With': 'XMLHttpRequest'
+            }
+        })
             .then(function(response) { return response.json(); })
             .then(function(data) {
                 var list = document.getElementById('notificationsList');
@@ -309,8 +316,15 @@
         });
     }
 
+    // =============================================================
+    // ✅ FIXED: updateNotificationBadge() - Added AJAX header
+    // =============================================================
     function updateNotificationBadge() {
-        fetch('/notifications/unread-count')
+        fetch('/notifications/unread-count', {
+            headers: {
+                'X-Requested-With': 'XMLHttpRequest'
+            }
+        })
             .then(function(response) { return response.json(); })
             .then(function(data) {
                 var badge = document.getElementById('notificationBadge');

@@ -12,6 +12,6 @@
         @include('layouts.top-nav')
         
         <!-- Page Content -->
-        @yield('dashboard-content')  <!-- ✅ THIS STAYS -->
+        @yield('dashboard-content')  
     </div>
 @endsection

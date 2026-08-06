@@ -86,6 +86,9 @@ class DriverController extends Controller
         return view('driver.orders', compact('orders'));
     }
 
+    // ============================================================
+    // ✅ FIXED: updateStatus() - No redirect()->back()
+    // ============================================================
     public function updateStatus(Request $request, Order $order)
     {
         try {
@@ -109,7 +112,8 @@ class DriverController extends Controller
                     ], 403);
                 }
                 
-                return redirect()->back()->with('error', $errorMessage);
+                // ✅ FIXED: Explicit redirect
+                return redirect()->route('driver.dashboard')->with('error', $errorMessage);
             }
             
             $validator = Validator::make($request->all(), [
@@ -124,7 +128,8 @@ class DriverController extends Controller
                     ], 422);
                 }
                 
-                return redirect()->back()->withErrors($validator);
+                // ✅ FIXED: Explicit redirect
+                return redirect()->route('driver.dashboard')->withErrors($validator);
             }
             
             $oldStatus = $order->status;
@@ -184,7 +189,8 @@ class DriverController extends Controller
                 ]);
             }
             
-            return redirect()->back()->with('success', $message);
+            // ✅ FIXED: Explicit redirect
+            return redirect()->route('driver.dashboard')->with('success', $message);
             
         } catch (\Exception $e) {
             Log::error('❌ Error updating status: ' . $e->getMessage(), [
@@ -198,10 +204,14 @@ class DriverController extends Controller
                 ], 500);
             }
             
-            return redirect()->back()->with('error', 'Error updating status: ' . $e->getMessage());
+            // ✅ FIXED: Explicit redirect
+            return redirect()->route('driver.dashboard')->with('error', 'Error updating status: ' . $e->getMessage());
         }
     }
 
+    // ============================================================
+    // ✅ FIXED: toggleStatus() - No redirect()->back()
+    // ============================================================
     public function toggleStatus(Request $request)
     {
         $user = Auth::user();
@@ -212,10 +222,13 @@ class DriverController extends Controller
             $driver->save();
             
             $status = $driver->is_available ? 'online' : 'offline';
-            return redirect()->back()->with('success', "You are now {$status}.");
+            
+            // ✅ FIXED: Explicit redirect
+            return redirect()->route('driver.dashboard')->with('success', "You are now {$status}.");
         }
         
-        return redirect()->back()->with('error', 'Driver profile not found.');
+        // ✅ FIXED: Explicit redirect
+        return redirect()->route('driver.dashboard')->with('error', 'Driver profile not found.');
     }
 
     public function location()
@@ -247,6 +260,9 @@ class DriverController extends Controller
         return view('admin.drivers', compact('drivers'));
     }
 
+    // ============================================================
+    // ✅ FIXED: store() - No redirect()->back()
+    // ============================================================
     public function store(Request $request)
     {
         if (Auth::user()->role !== 'admin') {
@@ -265,7 +281,8 @@ class DriverController extends Controller
         ]);
 
         if ($validator->fails()) {
-            return redirect()->back()
+            // ✅ FIXED: Explicit redirect
+            return redirect()->route('admin.drivers')
                 ->withErrors($validator)
                 ->withInput();
         }
@@ -308,7 +325,8 @@ class DriverController extends Controller
                 
         } catch (\Exception $e) {
             DB::rollBack();
-            return redirect()->back()
+            // ✅ FIXED: Explicit redirect
+            return redirect()->route('admin.drivers')
                 ->with('error', 'Error creating driver: ' . $e->getMessage())
                 ->withInput();
         }
@@ -371,7 +389,7 @@ class DriverController extends Controller
     }
 
     // ============================================================
-    // ✅ FIXED: UPDATE - Uses driver ID with proper fields
+    // ✅ FIXED: update() - No redirect()->back()
     // ============================================================
     public function update(Request $request, $driverId)
     {
@@ -380,18 +398,17 @@ class DriverController extends Controller
         }
 
         try {
-            // ✅ DEBUG: Log everything
             Log::info('🔵 UPDATE DRIVER CALLED', [
                 'driver_id' => $driverId,
                 'request_all' => $request->all()
             ]);
 
-            // ✅ Find driver by driver ID
             $driver = Driver::with('user')->find($driverId);
             
             if (!$driver) {
                 Log::error('❌ Driver not found with ID: ' . $driverId);
-                return redirect()->back()
+                // ✅ FIXED: Explicit redirect
+                return redirect()->route('admin.drivers')
                     ->with('error', 'Driver not found with ID: ' . $driverId);
             }
 
@@ -399,17 +416,18 @@ class DriverController extends Controller
             
             if (!$user) {
                 Log::error('❌ User not found for driver ID: ' . $driverId);
-                return redirect()->back()
+                // ✅ FIXED: Explicit redirect
+                return redirect()->route('admin.drivers')
                     ->with('error', 'User not found for this driver.');
             }
 
             if ($user->role !== 'driver') {
                 Log::error('❌ User is not a driver: ' . $user->id);
-                return redirect()->back()
+                // ✅ FIXED: Explicit redirect
+                return redirect()->route('admin.drivers')
                     ->with('error', 'User is not a driver');
             }
 
-            // ✅ FIXED: Validation - use vehicle_id instead of vehicle_model/plate_number
             $validator = Validator::make($request->all(), [
                 'name' => 'required|string|max:255',
                 'email' => 'required|email|unique:users,email,' . $user->id,
@@ -421,14 +439,14 @@ class DriverController extends Controller
 
             if ($validator->fails()) {
                 Log::error('❌ Validation failed: ', $validator->errors()->toArray());
-                return redirect()->back()
+                // ✅ FIXED: Explicit redirect
+                return redirect()->route('admin.drivers')
                     ->withErrors($validator)
                     ->withInput();
             }
 
             DB::beginTransaction();
 
-            // ✅ Update USER (name and email are in users table)
             $user->update([
                 'name' => $request->name,
                 'email' => $request->email,
@@ -436,13 +454,11 @@ class DriverController extends Controller
 
             Log::info('✅ User updated: ', ['user_id' => $user->id]);
 
-            // ✅ Handle is_available properly (checkbox or radio)
             $isAvailable = false;
             if ($request->has('is_available')) {
                 $isAvailable = $request->is_available == '1' || $request->is_available == 'on' || $request->is_available === true;
             }
 
-            // ✅ Update DRIVER - Only fields that exist in drivers table
             $driverData = [
                 'phone' => $request->phone,
                 'license_number' => $request->license_number,
@@ -460,22 +476,16 @@ class DriverController extends Controller
                 'is_available' => $driver->is_available
             ]);
 
-            // ✅ Handle vehicle assignment using vehicle_id
             if ($request->filled('vehicle_id') && $request->vehicle_id != '') {
-                // Unassign previous vehicle if exists
                 if ($driver->vehicle_id) {
                     Vehicle::where('id', $driver->vehicle_id)->update(['driver_id' => null]);
                 }
                 
-                // Assign new vehicle to driver
                 $driver->update(['vehicle_id' => $request->vehicle_id]);
-                
-                // Update vehicle's driver_id
                 Vehicle::where('id', $request->vehicle_id)->update(['driver_id' => $driver->id]);
                 
                 Log::info('✅ Vehicle assigned: ', ['vehicle_id' => $request->vehicle_id]);
             } else {
-                // Remove vehicle assignment
                 if ($driver->vehicle_id) {
                     Vehicle::where('id', $driver->vehicle_id)->update(['driver_id' => null]);
                 }
@@ -485,7 +495,6 @@ class DriverController extends Controller
 
             DB::commit();
 
-            // ✅ Verify the update worked
             $updatedDriver = Driver::with('user', 'vehicle')->find($driverId);
             Log::info('✅ VERIFICATION - Driver after update: ', [
                 'id' => $updatedDriver->id,
@@ -504,14 +513,15 @@ class DriverController extends Controller
                 'trace' => $e->getTraceAsString(),
                 'driver_id' => $driverId
             ]);
-            return redirect()->back()
+            // ✅ FIXED: Explicit redirect
+            return redirect()->route('admin.drivers')
                 ->with('error', 'Error updating driver: ' . $e->getMessage())
                 ->withInput();
         }
     }
 
     // ============================================================
-    // TOGGLE STATUS ADMIN - Uses driver ID
+    // TOGGLE STATUS ADMIN
     // ============================================================
     public function toggleStatusAdmin($driverId)
     {
@@ -543,7 +553,7 @@ class DriverController extends Controller
     }
 
     // ============================================================
-    // DELETE DRIVER - Uses driver ID
+    // DELETE DRIVER
     // ============================================================
     public function destroy($driverId)
     {
