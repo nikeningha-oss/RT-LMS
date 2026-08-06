@@ -25,7 +25,7 @@ class OrderController extends Controller
     }
 
     /**
-     * ✅ Store a new order with AUTO CALCULATION
+     * Store a new order with AUTO CALCULATION
      */
     public function store(Request $request)
     {
@@ -70,7 +70,6 @@ class OrderController extends Controller
             'total_price' => 0,
         ]);
 
-        // ✅ AUTO-CALCULATE THE PRICE (Status becomes price_pending)
         $order->applyAutoPrice();
 
         return redirect()->route('customer.orders')
@@ -102,7 +101,7 @@ class OrderController extends Controller
     }
 
     /**
-     * ✅ SHOW ASSIGN DRIVER FORM (Admin only)
+     * SHOW ASSIGN DRIVER FORM (Admin only)
      */
     public function showAssignDriver($orderId)
     {
@@ -127,16 +126,17 @@ class OrderController extends Controller
     }
 
     /**
-     * ✅ FIXED: ASSIGN DRIVER TO ORDER (Admin only) - RETURNS JSON FOR AJAX
+     * ASSIGN DRIVER TO ORDER (Admin only) - Supports both form submit and AJAX
      */
     public function assignDriver(Request $request, $orderId)
     {
         // Check if user is admin
         if (Auth::user()->role !== 'admin') {
-            return response()->json([
-                'success' => false,
-                'message' => 'Unauthorized access. Only admins can assign drivers.'
-            ], 403);
+            $message = 'Unauthorized access. Only admins can assign drivers.';
+            if ($request->ajax() || $request->expectsJson()) {
+                return response()->json(['success' => false, 'message' => $message], 403);
+            }
+            return redirect()->back()->with('error', $message);
         }
 
         // Validate request
@@ -146,102 +146,112 @@ class OrderController extends Controller
         ]);
 
         if ($validator->fails()) {
-            return response()->json([
-                'success' => false,
-                'message' => $validator->errors()->first()
-            ], 400);
+            $message = $validator->errors()->first();
+            if ($request->ajax() || $request->expectsJson()) {
+                return response()->json(['success' => false, 'message' => $message], 400);
+            }
+            return redirect()->back()->withErrors($validator)->withInput();
         }
 
         try {
-            // Find the order
             $order = Order::findOrFail($orderId);
-            
-            // ✅ CHECK IF PAYMENT IS COMPLETE
+
+            // Check if payment is complete
             if (!$order->isPaid()) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Cannot assign driver. Payment has not been completed.'
-                ], 400);
+                $message = 'Cannot assign driver. Payment has not been completed.';
+                if ($request->ajax() || $request->expectsJson()) {
+                    return response()->json(['success' => false, 'message' => $message], 400);
+                }
+                return redirect()->back()->with('error', $message);
             }
-            
+
             // Get the driver user
             $driverUser = User::findOrFail($request->driver_id);
-            
+
             // Check if user is a driver
             if ($driverUser->role !== 'driver') {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Selected user is not a driver.'
-                ], 400);
+                $message = 'Selected user is not a driver.';
+                if ($request->ajax() || $request->expectsJson()) {
+                    return response()->json(['success' => false, 'message' => $message], 400);
+                }
+                return redirect()->back()->with('error', $message);
             }
-            
+
             // Check if driver has a driver profile
             $driver = Driver::where('user_id', $driverUser->id)->first();
             if (!$driver) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'This user does not have a driver profile.'
-                ], 400);
+                $message = 'This user does not have a driver profile.';
+                if ($request->ajax() || $request->expectsJson()) {
+                    return response()->json(['success' => false, 'message' => $message], 400);
+                }
+                return redirect()->back()->with('error', $message);
             }
-            
+
             // Check if driver is available
             if (!$driver->is_available) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'This driver is currently not available.'
-                ], 400);
+                $message = 'This driver is currently not available.';
+                if ($request->ajax() || $request->expectsJson()) {
+                    return response()->json(['success' => false, 'message' => $message], 400);
+                }
+                return redirect()->back()->with('error', $message);
             }
-            
+
             // Check if driver is already assigned to another active order
             $existingOrder = Order::where('driver_id', $driverUser->id)
                 ->whereNotIn('status', ['delivered', 'cancelled'])
                 ->first();
             if ($existingOrder) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Driver is already assigned to another active order (#' . $existingOrder->order_number . ').'
-                ], 400);
+                $message = 'Driver is already assigned to another active order (#' . $existingOrder->order_number . ').';
+                if ($request->ajax() || $request->expectsJson()) {
+                    return response()->json(['success' => false, 'message' => $message], 400);
+                }
+                return redirect()->back()->with('error', $message);
             }
-            
+
             // Assign driver to order
             $order->driver_id = $driverUser->id;
             $order->status = Order::STATUS_ASSIGNED;
             $order->save();
-            
+
             // Update driver availability
             $driver->is_available = false;
             $driver->save();
-            
-            Log::info('✅ Driver assigned to order', [
+
+            Log::info('Driver assigned to order', [
                 'order_id' => $order->id,
                 'order_number' => $order->order_number,
                 'driver_id' => $driverUser->id,
                 'driver_name' => $driverUser->name,
                 'admin_id' => Auth::id()
             ]);
-            
-            return response()->json([
-                'success' => true,
-                'message' => '✅ Driver assigned successfully to order #' . $order->order_number
-            ]);
-            
+
+            $message = 'Driver assigned successfully to order #' . $order->order_number;
+
+            if ($request->ajax() || $request->expectsJson()) {
+                return response()->json(['success' => true, 'message' => $message]);
+            }
+
+            return redirect()->route('admin.orders')->with('success', $message);
+
         } catch (\Exception $e) {
             Log::error('Assign driver error: ' . $e->getMessage(), [
                 'order_id' => $orderId,
                 'driver_id' => $request->driver_id ?? null,
                 'trace' => $e->getTraceAsString()
             ]);
-            
-            return response()->json([
-                'success' => false,
-                'message' => 'Error assigning driver: ' . $e->getMessage()
-            ], 500);
+
+            $message = 'Error assigning driver: ' . $e->getMessage();
+
+            if ($request->ajax() || $request->expectsJson()) {
+                return response()->json(['success' => false, 'message' => $message], 500);
+            }
+
+            return redirect()->back()->with('error', $message);
         }
     }
 
     /**
-     * ✅ SET ORDER PRICE (Admin only)
-     * Sets price and changes status to price_pending
+     * SET ORDER PRICE (Admin only)
      */
     public function setPrice(Request $request, $orderId)
     {
@@ -308,8 +318,7 @@ class OrderController extends Controller
     }
 
     /**
-     * ✅ CONFIRM PRICE (Customer only)
-     * Customer confirms the price - status becomes price_confirmed
+     * CONFIRM PRICE (Customer only)
      */
     public function confirmPrice($orderId)
     {
@@ -329,7 +338,6 @@ class OrderController extends Controller
                 ], 400);
             }
             
-            // ✅ Customer confirms price - status becomes price_confirmed
             $order->confirmPrice();
             
             return response()->json([
@@ -346,7 +354,7 @@ class OrderController extends Controller
     }
 
     /**
-     * ✅ SHOW PAYMENT PAGE (Customer only)
+     * SHOW PAYMENT PAGE (Customer only)
      */
     public function showPayment($orderId)
     {
@@ -367,8 +375,7 @@ class OrderController extends Controller
     }
 
     /**
-     * ✅ PROCESS PAYMENT (Customer only)
-     * Payment completes - status becomes assigned, payment_status becomes paid
+     * PROCESS PAYMENT (Customer only)
      */
     public function processPayment(Request $request, $orderId)
     {
@@ -386,7 +393,6 @@ class OrderController extends Controller
                     ->with('error', 'Order is not ready for payment.');
             }
             
-            // ✅ Customer pays - status becomes assigned, payment_status becomes paid
             $order->markAsPaid();
             
             return redirect()->route('customer.orders')
@@ -531,12 +537,8 @@ class OrderController extends Controller
         return response()->json($vehicles);
     }
 
-    // ============================================================
-    // ✅ NEW METHODS FOR ADMIN ORDER MAP
-    // ============================================================
-
     /**
-     * ✅ Get order route data for the map (Admin)
+     * Get order route data for the map (Admin)
      */
     public function getOrderRoute($orderId)
     {
@@ -568,16 +570,13 @@ class OrderController extends Controller
     }
 
     /**
-     * ✅ FIXED: Get ALL online drivers (not just nearby)
-     * This allows admin to assign any online driver even if far
-     * Now shows drivers WITHOUT location data too!
+     * Get ALL online drivers (not just nearby)
      */
     public function getAllDrivers($orderId)
     {
         try {
             $order = Order::findOrFail($orderId);
             
-            // ✅ FIXED: Show ALL online drivers, including those without location
             $drivers = Driver::with(['user', 'vehicle'])
                 ->where('is_available', true)
                 ->get();
@@ -587,7 +586,6 @@ class OrderController extends Controller
                 'total_drivers' => $drivers->count()
             ]);
             
-            // Calculate distance for each driver (if pickup coordinates exist)
             $driversWithDistance = $drivers->map(function($driver) use ($order) {
                 $distance = null;
                 if ($order->pickup_lat && $order->pickup_lng && $driver->current_lat && $driver->current_lng) {
@@ -600,7 +598,7 @@ class OrderController extends Controller
                 }
                 
                 return [
-                    'id' => $driver->user_id, // ✅ Use user_id as ID (matches User model)
+                    'id' => $driver->user_id,
                     'user_id' => $driver->user_id,
                     'name' => $driver->name ?? $driver->user->name ?? 'Unknown',
                     'phone' => $driver->phone ?? $driver->user->phone ?? 'N/A',
@@ -617,7 +615,7 @@ class OrderController extends Controller
                     'last_known_location_at' => $driver->last_known_location_at,
                 ];
             })->sortBy(function($driver) {
-                return $driver['distance'] ?? 99999; // Sort by distance, unknown last
+                return $driver['distance'] ?? 99999;
             })->values();
             
             return response()->json([
@@ -650,15 +648,13 @@ class OrderController extends Controller
     }
 
     /**
-     * ✅ FIXED: Get nearby drivers (within 10km)
-     * Now shows drivers WITHOUT location data too (will show as "Location unknown")
+     * Get nearby drivers (within 10km)
      */
     public function getNearbyDrivers($orderId)
     {
         try {
             $order = Order::findOrFail($orderId);
             
-            // Check if order has pickup coordinates
             if (!$order->pickup_lat || !$order->pickup_lng) {
                 return response()->json([
                     'success' => false,
@@ -666,12 +662,10 @@ class OrderController extends Controller
                 ], 400);
             }
             
-            // ✅ FIXED: Get all online drivers, including those without location
             $drivers = Driver::with(['user', 'vehicle'])
                 ->where('is_available', true)
                 ->get();
             
-            // Calculate distance for each driver
             $driversWithDistance = $drivers->map(function($driver) use ($order) {
                 $distance = null;
                 if ($driver->current_lat && $driver->current_lng) {
@@ -684,7 +678,7 @@ class OrderController extends Controller
                 }
                 
                 return [
-                    'id' => $driver->user_id, // ✅ Use user_id as ID
+                    'id' => $driver->user_id,
                     'user_id' => $driver->user_id,
                     'name' => $driver->name ?? $driver->user->name ?? 'Unknown',
                     'phone' => $driver->phone ?? $driver->user->phone ?? 'N/A',
@@ -701,14 +695,12 @@ class OrderController extends Controller
                     'last_known_location_at' => $driver->last_known_location_at,
                 ];
             })->filter(function($driver) {
-                // ✅ FIXED: Include drivers without location (they'll show "Location unknown")
                 if ($driver['distance'] === null) {
-                    return true; // Include drivers with unknown location
+                    return true;
                 }
-                // Only include drivers within 10km if they have location
                 return $driver['distance'] <= 10;
             })->sortBy(function($driver) {
-                return $driver['distance'] ?? 99999; // Sort by distance, unknown last
+                return $driver['distance'] ?? 99999;
             })->values();
             
             return response()->json([
@@ -741,7 +733,7 @@ class OrderController extends Controller
     }
 
     /**
-     * ✅ NEW: Get driver location for tracking (Web route - uses session auth)
+     * Get driver location for tracking
      */
     public function getDriverLocation($driverId)
     {
@@ -757,7 +749,6 @@ class OrderController extends Controller
                 ], 404);
             }
             
-            // Check if the user is authorized to view this
             $user = Auth::user();
             $isAuthorized = false;
             
@@ -766,7 +757,6 @@ class OrderController extends Controller
             } elseif ($user->role === 'driver' && $user->id == $driverId) {
                 $isAuthorized = true;
             } elseif ($user->role === 'customer') {
-                // Check if customer has an active order with this driver
                 $hasOrder = Order::where('customer_id', $user->id)
                     ->where('driver_id', $driverId)
                     ->whereNotIn('status', ['delivered', 'cancelled'])
@@ -788,7 +778,7 @@ class OrderController extends Controller
                 'speed' => $driver->current_speed ?? 0,
                 'is_available' => $driver->is_available,
                 'last_updated' => $driver->last_known_location_at,
-                'eta' => null // You can calculate ETA if needed
+                'eta' => null
             ]);
             
         } catch (\Exception $e) {
@@ -801,14 +791,13 @@ class OrderController extends Controller
     }
 
     /**
-     * ✅ NEW: Update driver location (Web route)
+     * Update driver location (Web route)
      */
     public function updateDriverLocation(Request $request, $orderId)
     {
         try {
             $user = Auth::user();
             
-            // Only drivers can update location
             if ($user->role !== 'driver') {
                 return response()->json([
                     'success' => false,
@@ -816,7 +805,6 @@ class OrderController extends Controller
                 ], 403);
             }
             
-            // Check if driver is assigned to this order
             $order = Order::where('id', $orderId)
                 ->where('driver_id', $user->id)
                 ->first();
@@ -842,7 +830,6 @@ class OrderController extends Controller
                 ], 400);
             }
             
-            // Update driver location
             $driver = Driver::where('user_id', $user->id)->first();
             if ($driver) {
                 $driver->update([
@@ -872,7 +859,7 @@ class OrderController extends Controller
      */
     private function calculateDistance($lat1, $lon1, $lat2, $lon2)
     {
-        $R = 6371; // Earth's radius in km
+        $R = 6371;
         $dLat = deg2rad($lat2 - $lat1);
         $dLon = deg2rad($lon2 - $lon1);
         $a = sin($dLat/2) * sin($dLat/2) +
