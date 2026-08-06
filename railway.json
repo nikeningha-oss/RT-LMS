@@ -1,9 +1,9 @@
 {
   "build": {
     "builder": "NIXPACKS",
-    "buildCommand": "composer install --no-dev --optimize-autoloader && php artisan package:discover --ansi && php artisan config:cache"
+    "buildCommand": "composer install --no-dev --optimize-autoloader && php artisan package:discover --ansi && composer dump-autoload --optimize"
   },
   "deploy": {
-    "startCommand": "php artisan serve --host=0.0.0.0 --port=${PORT:-8000}"
+    "startCommand": "php artisan serve --host=0.0.0.0 --port=$PORT"
   }
 }
